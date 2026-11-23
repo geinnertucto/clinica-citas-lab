@@ -19,14 +19,35 @@ Todo se hace desde el navegador, sin instalar nada y sin cuenta de GitHub.
 - **Guardar la evidencia:** clic en el número de una línea. La dirección del navegador termina en `#L12`: esa dirección
   lleva justo a esa línea. Cópienla en el informe.
 
-**Pistas por capacidad**
+**Qué busca cada capacidad**
 
-| Capacidad       | Dónde mirar                                             | Preguntas que ayudan                                                                                                                                                                                        |
-| --------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **SAST**        | `src/server.js` y `src/db.js`                           | ¿La app arma una consulta a la base de datos pegando lo que escribe el usuario? ¿Cómo se guardan las claves de los pacientes? Cuando alguien pide una receta, ¿podría pedir cualquier otro archivo?          |
-| **Secretos**    | Todos los archivos, también los que empiezan con punto, y el historial | Busquen palabras como `clave`, `key`, `token`, `secret` o `password`. ¿Qué archivos de configuración se subieron? Un secreto borrado, ¿desaparece del historial?                         |
-| **SCA**         | `package.json` y `package-lock.json`                    | ¿Qué versión de cada librería usa la app? Búsquenla en [osv.dev](https://osv.dev): ¿tiene fallas conocidas? El equipo pidió 4 librerías: ¿cuántas hay en total en `package-lock.json`, y quién trajo las demás? |
-| **Contenedores**| `Dockerfile`                                            | La primera línea dice qué imagen base se usa: ¿esa versión de Node.js todavía recibe parches? ¿Con qué usuario corre la app? ¿Hay algo que no debería estar escrito ahí? ¿Qué mete `COPY . .` en la imagen? |
+| Capacidad        | Busca…                                                                                                      |
+| ---------------- | ----------------------------------------------------------------------------------------------------------- |
+| **SAST**         | Errores en el código que escribió el equipo y que un atacante puede aprovechar.                             |
+| **Secretos**     | Claves, contraseñas o tokens que quedaron escritos donde cualquiera con acceso al repositorio los puede leer. |
+| **SCA**          | Librerías de terceros con fallas ya conocidas y publicadas (CVE).                                           |
+| **Contenedores** | Lo que trae la imagen sobre la que corre la app y cómo se arma y se ejecuta el contenedor.                  |
+
+**Mapa del repositorio:** qué es cada archivo. No todos tienen problemas; decidan ustedes dónde mirar.
+
+| Archivo o carpeta                   | Qué es                                                                                                                                  |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/server.js`                     | El corazón de la app: recibe cada pedido del celular (iniciar sesión, ver una cita, descargar una receta, pagar) y decide qué responder. |
+| `src/db.js`                         | Crea la base de datos y carga los pacientes y sus citas.                                                                                |
+| `src/pagos.js`                      | Conecta la app con la pasarela de pagos.                                                                                                |
+| `public/`                           | Las pantallas que ve el paciente.                                                                                                       |
+| `recetas/`                          | Las recetas que el paciente puede descargar.                                                                                            |
+| `package.json`                      | La lista de librerías de terceros que el equipo decidió usar, con su versión.                                                           |
+| `package-lock.json`                 | La lista completa de lo que se instala: las librerías que pidió el equipo y las que esas librerías traen a su vez.                      |
+| `Dockerfile`                        | La receta del contenedor que va a producción: sobre qué imagen base se construye, qué se copia adentro, con qué usuario corre y cómo arranca. |
+| `.env`                              | Valores de configuración que la app lee al arrancar.                                                                                    |
+| `.gitignore`                        | La lista de archivos que Git no debe subir al repositorio.                                                                              |
+| `.github/workflows/`                | El pipeline de CI/CD: los controles que corren en cada pull request. Lo verán en la parte 3.                                            |
+| `.devcontainer/` y `scripts/`       | El entorno de trabajo del desarrollador en GitHub Codespaces y un atajo para levantar la app. No van a producción.                      |
+| Historial (**Commits**)             | Cada cambio que se hizo al repositorio, con fecha y autor. Todo lo que alguna vez se subió queda registrado ahí.                         |
+
+**Para verificar lo que encuentren:** [osv.dev](https://osv.dev) dice si una versión de una librería tiene fallas
+conocidas, y [endoflife.date](https://endoflife.date) dice hasta cuándo una versión de un software recibe parches.
 
 ## 2 · Armen el informe
 
@@ -66,8 +87,6 @@ Para conversar en la sala:
 
 El docente levanta la app y comparte la dirección. Ingresen desde el celular con `ana` y la clave `ana2026` y abran
 una de sus citas. Hay un riesgo más, y **no lo detecta ninguno de los escáneres del pipeline**. ¿Lo encuentran?
-
-Pista: miren la dirección de la página de la cita.
 
 ## 6 · El dictamen
 

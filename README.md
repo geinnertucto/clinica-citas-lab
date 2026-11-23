@@ -119,5 +119,6 @@ Después de la clase, cierra el pull request sin fusionarlo, para que el reposit
 
 ## Herramientas y versiones
 
-Semgrep 1.183.0, Gitleaks 8.30.1 y Trivy 0.76.2, cada una en su imagen oficial de Docker. Las reglas propias del
-proyecto están en [`.semgrep.yml`](.semgrep.yml) y [`.gitleaks.toml`](.gitleaks.toml).
+Semgrep 1.183.0, Gitleaks 8.30.1 y Trivy 0.76.2, cada una en su imagen oficial de Docker. Además de sus reglas
+públicas, Semgrep y Gitleaks usan reglas propias del proyecto, guardadas como variables del repositorio
+(`SEMGREP_REGLAS` y `GITLEAKS_REGLAS`); sin ellas, el pipeline corre solo con las públicas.

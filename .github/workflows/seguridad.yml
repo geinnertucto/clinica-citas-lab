@@ -43,9 +43,13 @@ jobs:
         with:
           ref: ${{ env.COMMIT_SHA }}
       - name: Revisar el código con Semgrep
+        env:
+          REGLAS_PROPIAS: ${{ vars.SEMGREP_REGLAS }} # reglas del proyecto, guardadas como variable del repositorio
         run: |
-          docker run --rm -v "$PWD:/src" -w /src "$SEMGREP_IMAGEN" semgrep scan \
-            --config p/javascript --config p/expressjs --config .semgrep.yml \
+          mkdir -p "$RUNNER_TEMP/reglas" && printf '%s\n' "$REGLAS_PROPIAS" > "$RUNNER_TEMP/reglas/semgrep.yml"
+          PROPIAS=""; [ -n "$REGLAS_PROPIAS" ] && PROPIAS="--config /reglas/semgrep.yml"
+          docker run --rm -v "$PWD:/src" -v "$RUNNER_TEMP/reglas:/reglas:ro" -w /src "$SEMGREP_IMAGEN" semgrep scan \
+            --config p/javascript --config p/expressjs $PROPIAS \
             --metrics off --json --output sast.json src
       - name: Informe
         id: informe
@@ -70,9 +74,13 @@ jobs:
           ref: ${{ env.COMMIT_SHA }}
           fetch-depth: 0 # todo el historial: un secreto borrado sigue en los commits anteriores
       - name: Buscar secretos en los archivos y en el historial
+        env:
+          REGLAS_PROPIAS: ${{ vars.GITLEAKS_REGLAS }} # reglas del proyecto, guardadas como variable del repositorio
         run: |
-          docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/repo" "$GITLEAKS_IMAGEN" git /repo \
-            --config /repo/.gitleaks.toml --redact --exit-code 0 \
+          mkdir -p "$RUNNER_TEMP/reglas" && printf '%s\n' "$REGLAS_PROPIAS" > "$RUNNER_TEMP/reglas/gitleaks.toml"
+          PROPIAS=""; [ -n "$REGLAS_PROPIAS" ] && PROPIAS="--config /reglas/gitleaks.toml"
+          docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/repo" -v "$RUNNER_TEMP/reglas:/reglas:ro" \
+            "$GITLEAKS_IMAGEN" git /repo $PROPIAS --redact --exit-code 0 \
             --report-format json --report-path /repo/secretos.json
       - name: Informe
         id: informe
