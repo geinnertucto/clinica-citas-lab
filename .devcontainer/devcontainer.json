@@ -1,0 +1,13 @@
+{
+  "name": "Clínica Andina · laboratorio",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:22-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/sshd:1": {}
+  },
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": { "label": "App de citas", "onAutoForward": "notify" }
+  },
+  "postCreateCommand": "chmod +x scripts/levantar.sh"
+}

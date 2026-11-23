@@ -1,0 +1,13 @@
+# Reglas propias de Semgrep para este proyecto, además de las públicas.
+rules:
+  - id: hash-debil-para-claves
+    languages: [javascript]
+    severity: ERROR
+    message: >-
+      Las claves se guardan con MD5 o SHA-1. Son hashes rápidos y sin sal: con el hash se recupera la clave en
+      segundos. Usa un algoritmo hecho para claves, como bcrypt, scrypt o Argon2.
+    metadata:
+      cwe: "CWE-916: Use of Password Hash With Insufficient Computational Effort"
+    pattern-either:
+      - pattern: crypto.createHash("md5")
+      - pattern: crypto.createHash("sha1")

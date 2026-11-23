@@ -1,0 +1,196 @@
+# Pipeline de seguridad de la app de citas (laboratorio didáctico).
+# Cada PR pasa por: build → SAST, secretos, SCA y contenedor → informe en el PR → deploy (simulado).
+# Si un control encuentra algo sobre su regla de corte, el pipeline se detiene: es el build break.
+name: Pipeline de seguridad
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  SEMGREP_IMAGEN: semgrep/semgrep:1.183.0
+  GITLEAKS_IMAGEN: zricethezav/gitleaks:v8.30.1
+  TRIVY_IMAGEN: aquasec/trivy:0.76.2
+
+jobs:
+  build:
+    name: 0 · Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ env.COMMIT_SHA }}
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: 22
+      - name: Instalar dependencias
+        run: npm ci --no-audit --no-fund
+      - name: Probar que la app arranca
+        run: |
+          (PORT=3000 npm start &) && sleep 3
+          curl --fail --silent http://localhost:3000/ > /dev/null && echo "La app responde."
+
+  sast:
+    name: 1 · SAST (Semgrep)
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ env.COMMIT_SHA }}
+      - name: Revisar el código con Semgrep
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src "$SEMGREP_IMAGEN" semgrep scan \
+            --config p/javascript --config p/expressjs --config .semgrep.yml \
+            --metrics off --json --output sast.json src
+      - name: Informe
+        id: informe
+        if: always()
+        run: node .github/scripts/informe.js sast sast.json sast.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: informe-sast
+          path: sast.*
+      - name: Regla de corte
+        if: steps.informe.outputs.bloquea == 'true'
+        run: echo "::error::SAST encontró hallazgos sobre la regla de corte. El pipeline se detiene." && exit 1
+
+  secretos:
+    name: 2 · Secretos (Gitleaks)
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ env.COMMIT_SHA }}
+          fetch-depth: 0 # todo el historial: un secreto borrado sigue en los commits anteriores
+      - name: Buscar secretos en los archivos y en el historial
+        run: |
+          docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/repo" "$GITLEAKS_IMAGEN" git /repo \
+            --config /repo/.gitleaks.toml --redact --exit-code 0 \
+            --report-format json --report-path /repo/secretos.json
+      - name: Informe
+        id: informe
+        if: always()
+        run: node .github/scripts/informe.js secretos secretos.json secretos.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: informe-secretos
+          path: secretos.*
+      - name: Regla de corte
+        if: steps.informe.outputs.bloquea == 'true'
+        run: echo "::error::Hay secretos en el repositorio. El pipeline se detiene." && exit 1
+
+  sca:
+    name: 3 · SCA (Trivy)
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ env.COMMIT_SHA }}
+      - name: Revisar las librerías de terceros
+        run: |
+          docker run --rm -v "$PWD:/repo" "$TRIVY_IMAGEN" fs --scanners vuln --list-all-pkgs \
+            --format json --output /repo/sca.json /repo
+      - name: Generar el SBOM (lista de librerías)
+        run: docker run --rm -v "$PWD:/repo" "$TRIVY_IMAGEN" fs --format cyclonedx --output /repo/sbom.cdx.json /repo
+      - name: Informe
+        id: informe
+        if: always()
+        run: node .github/scripts/informe.js sca sca.json sca.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: informe-sca
+          path: |
+            sca.*
+            sbom.cdx.json
+      - name: Regla de corte
+        if: steps.informe.outputs.bloquea == 'true'
+        run: echo "::error::Hay librerías con fallas altas o críticas. El pipeline se detiene." && exit 1
+
+  contenedor:
+    name: 4 · Contenedor (Trivy)
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ env.COMMIT_SHA }}
+      - name: Construir la imagen
+        run: docker build -t clinica-citas:${{ github.run_id }} .
+      - name: Revisar la imagen
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD:/repo" "$TRIVY_IMAGEN" image \
+            --scanners vuln,secret --format json --output /repo/imagen.json clinica-citas:${{ github.run_id }}
+      - name: Revisar el Dockerfile
+        run: docker run --rm -v "$PWD:/repo" -w /repo "$TRIVY_IMAGEN" config --format json --output dockerfile.json Dockerfile
+      - name: Informe
+        id: informe
+        if: always()
+        run: |
+          node .github/scripts/informe.js imagen imagen.json imagen.md > /dev/null
+          echo "bloquea_imagen=$(grep -c detiene imagen.md.estado)" >> "$GITHUB_OUTPUT"
+          node .github/scripts/informe.js dockerfile dockerfile.json dockerfile.md > /dev/null
+          echo "bloquea_dockerfile=$(grep -c detiene dockerfile.md.estado)" >> "$GITHUB_OUTPUT"
+          cat imagen.md dockerfile.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: informe-contenedor
+          path: |
+            imagen.*
+            dockerfile.*
+      - name: Regla de corte
+        if: steps.informe.outputs.bloquea_imagen != '0' || steps.informe.outputs.bloquea_dockerfile != '0'
+        run: echo "::error::La imagen o el Dockerfile tienen hallazgos sobre la regla de corte. El pipeline se detiene." && exit 1
+
+  informe:
+    name: Informe en el PR
+    needs: [sast, secretos, sca, contenedor]
+    if: always() && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          pattern: informe-*
+          merge-multiple: true
+      - name: Publicar el informe como comentario del PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ENLACE: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          {
+            echo "## Informe del pipeline de seguridad"
+            echo
+            echo "Commit revisado: \`${COMMIT_SHA:0:7}\` · [ver la ejecución completa]($ENLACE)"
+            echo
+            echo "| Control | Hallazgos | Resultado |"
+            echo "| --- | --- | --- |"
+            cat sast.md.estado secretos.md.estado sca.md.estado imagen.md.estado dockerfile.md.estado 2>/dev/null \
+              | sort | awk -F'\t' '{ print "| " $1 " | " $2 " | " ($3 == "detiene" ? "❌ detiene el pipeline" : "✅ pasa") " |" }'
+            echo
+            echo "> Los escáneres ven patrones conocidos. Lo que depende del negocio, como quién puede ver qué cita, lo revisa una persona."
+            echo
+            for f in sast secretos sca imagen dockerfile; do
+              [ -f "$f.md" ] && { echo "<details><summary>Detalle · $f</summary>"; echo; cat "$f.md"; echo; echo "</details>"; echo; }
+            done
+          } > comentario.md
+          gh pr comment "${{ github.event.pull_request.number }}" --repo "$GITHUB_REPOSITORY" \
+            --body-file comentario.md --edit-last --create-if-none
+
+  deploy:
+    name: 5 · Deploy (simulado)
+    needs: [sast, secretos, sca, contenedor]
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Todos los controles pasaron. Aquí se desplegaría la app (en este laboratorio no se despliega nada)."
