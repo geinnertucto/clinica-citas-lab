@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clínica Andina · Detalle de la cita</title>
+<link rel="stylesheet" href="estilos.css">
+</head>
+<body>
+<main>
+  <p class="aviso">Laboratorio didáctico · datos ficticios</p>
+  <p><a href="/">← Mis citas</a></p>
+  <h1>Detalle de la cita</h1>
+  <dl id="detalle"></dl>
+  <p id="error" class="error" role="alert"></p>
+</main>
+<script>
+  const id = new URLSearchParams(location.search).get('id');
+  fetch('/api/citas/' + encodeURIComponent(id), {
+    headers: { Authorization: 'Bearer ' + localStorage.getItem('token') },
+  })
+    .then(async (r) => {
+      const datos = await r.json();
+      if (!r.ok) throw new Error(datos.error);
+      const campos = { paciente: 'Paciente', especialidad: 'Especialidad', fecha: 'Fecha', medico: 'Médico', motivo: 'Motivo' };
+      const dl = document.getElementById('detalle');
+      for (const [clave, etiqueta] of Object.entries(campos)) {
+        const dt = document.createElement('dt');
+        dt.textContent = etiqueta;
+        const dd = document.createElement('dd');
+        dd.textContent = datos[clave];
+        dl.append(dt, dd);
+      }
+    })
+    .catch((e) => (document.getElementById('error').textContent = e.message));
+</script>
+</body>
+</html>

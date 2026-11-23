@@ -1,0 +1,16 @@
+{
+  "name": "clinica-citas-lab",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Laboratorio didáctico: app de citas de una clínica ficticia con vulnerabilidades sembradas a propósito.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "dotenv": "16.6.1",
+    "express": "4.17.1",
+    "jsonwebtoken": "8.5.1",
+    "sql.js": "1.13.0"
+  }
+}

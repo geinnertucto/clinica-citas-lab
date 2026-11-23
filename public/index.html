@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clínica Andina · Mis citas</title>
+<link rel="stylesheet" href="estilos.css">
+</head>
+<body>
+<main>
+  <p class="aviso">Laboratorio didáctico · datos ficticios</p>
+  <h1>Clínica Andina</h1>
+
+  <form id="ingreso">
+    <h2>Ingresa a tus citas</h2>
+    <label for="usuario">Usuario</label>
+    <input id="usuario" name="usuario" autocomplete="username" required>
+    <label for="clave">Clave</label>
+    <input id="clave" name="clave" type="password" autocomplete="current-password" required>
+    <button type="submit">Ingresar</button>
+    <p id="error" class="error" role="alert"></p>
+  </form>
+
+  <section id="citas" hidden>
+    <h2 id="saludo"></h2>
+    <ul id="lista"></ul>
+    <button type="button" id="salir" class="secundario">Salir</button>
+  </section>
+</main>
+<script>
+  const token = () => localStorage.getItem('token');
+
+  async function mostrarCitas() {
+    const r = await fetch('/api/mis-citas', { headers: { Authorization: 'Bearer ' + token() } });
+    if (!r.ok) return localStorage.clear();
+    const citas = await r.json();
+    document.getElementById('ingreso').hidden = true;
+    document.getElementById('citas').hidden = false;
+    document.getElementById('saludo').textContent = 'Hola, ' + localStorage.getItem('nombre');
+    const lista = document.getElementById('lista');
+    lista.innerHTML = '';
+    for (const c of citas) {
+      const li = document.createElement('li');
+      const a = document.createElement('a');
+      a.href = 'cita.html?id=' + c.id;
+      a.textContent = c.especialidad + ' · ' + c.fecha;
+      li.appendChild(a);
+      lista.appendChild(li);
+    }
+  }
+
+  document.getElementById('ingreso').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const r = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ usuario: usuario.value, clave: clave.value }),
+    });
+    const datos = await r.json();
+    if (!r.ok) return (document.getElementById('error').textContent = datos.error);
+    localStorage.setItem('token', datos.token);
+    localStorage.setItem('nombre', datos.nombre);
+    mostrarCitas();
+  });
+
+  document.getElementById('salir').addEventListener('click', () => {
+    localStorage.clear();
+    location.reload();
+  });
+
+  if (token()) mostrarCitas();
+</script>
+</body>
+</html>
