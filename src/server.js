@@ -55,6 +55,11 @@ app.get('/api/citas/:id', conSesion, (req, res) => {
   res.json(cita);
 });
 
+// Descargar la receta de una cita, por ejemplo /api/recetas?archivo=receta-2.txt
+app.get('/api/recetas', conSesion, (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'recetas', req.query.archivo));
+});
+
 // Pagar una cita.
 app.post('/api/citas/:id/pago', conSesion, (req, res) => {
   res.json(cobrarCita({ id: req.params.id }, 80));
