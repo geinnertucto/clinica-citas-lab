@@ -1,7 +1,7 @@
 // Cobro de la cita con la Pasarela Andina (pasarela ficticia: aquí no se cobra nada).
 
-// TODO: dejé la clave para probar rápido; luego la borro.
-const CLAVE_PASARELA = 'pa_live_N2CiSsApCPMRBuYy4RjmNstI2sPaaB3I';
+// La clave ya no está en el código: ahora viene del archivo .env.
+const CLAVE_PASARELA = process.env.PASARELA_KEY || '';
 
 function cobrarCita(cita, monto) {
   // En la vida real aquí se llamaría a la API de la pasarela con la clave.
