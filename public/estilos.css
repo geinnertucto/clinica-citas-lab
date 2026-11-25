@@ -22,3 +22,4 @@ a { color: var(--acento); }
 dt { font-weight: 700; margin-top: 8px; }
 dd { margin: 0; }
 .error { color: var(--error); font-weight: 600; }
+
